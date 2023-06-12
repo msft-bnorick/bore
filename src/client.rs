@@ -20,6 +20,9 @@ pub struct Client {
     /// Destination address of the server.
     to: String,
 
+    /// Control TCP port number.
+    control_port: u16,
+
     // Local host that is forwarded.
     local_host: String,
 
@@ -42,7 +45,19 @@ impl Client {
         port: u16,
         secret: Option<&str>,
     ) -> Result<Self> {
-        let mut stream = Delimited::new(connect_with_timeout(to, CONTROL_PORT).await?);
+        let to_parts: Vec<&str> = to.split(':').collect();
+        let to = to_parts.get(0).unwrap();
+        let control_port = match to_parts.get(1) {
+            Some(control_port_str) => {
+                if let Ok(value) = control_port_str.parse::<u16>() {
+                    value
+                } else {
+                    bail!("invalid \"to\" argument, specified port ({}) is not valid", control_port_str);
+                }
+            },
+            None => CONTROL_PORT
+        };
+        let mut stream = Delimited::new(connect_with_timeout(to, control_port).await?);
         let auth = secret.map(Authenticator::new);
         if let Some(auth) = &auth {
             auth.client_handshake(&mut stream).await?;
@@ -64,6 +79,7 @@ impl Client {
         Ok(Client {
             conn: Some(stream),
             to: to.to_string(),
+            control_port,
             local_host: local_host.to_string(),
             local_port,
             remote_port,
@@ -106,7 +122,7 @@ impl Client {
 
     async fn handle_connection(&self, id: Uuid) -> Result<()> {
         let mut remote_conn =
-            Delimited::new(connect_with_timeout(&self.to[..], CONTROL_PORT).await?);
+            Delimited::new(connect_with_timeout(&self.to[..], self.control_port).await?);
         if let Some(auth) = &self.auth {
             auth.client_handshake(&mut remote_conn).await?;
         }

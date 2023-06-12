@@ -15,6 +15,9 @@ use crate::shared::{proxy, ClientMessage, Delimited, ServerMessage, CONTROL_PORT
 
 /// State structure for the server.
 pub struct Server {
+    /// Control port
+    control_port: u16,
+
     /// Range of TCP ports that can be forwarded.
     port_range: RangeInclusive<u16>,
 
@@ -27,9 +30,11 @@ pub struct Server {
 
 impl Server {
     /// Create a new server with a specified minimum port number.
-    pub fn new(port_range: RangeInclusive<u16>, secret: Option<&str>) -> Self {
+    pub fn new(control_port: Option<u16>, port_range: RangeInclusive<u16>, secret: Option<&str>) -> Self {
         assert!(!port_range.is_empty(), "must provide at least one port");
+        let control_port = control_port.unwrap_or(CONTROL_PORT);
         Server {
+            control_port,
             port_range,
             conns: Arc::new(DashMap::new()),
             auth: secret.map(Authenticator::new),
@@ -38,8 +43,9 @@ impl Server {
 
     /// Start the server, listening for new connections.
     pub async fn listen(self) -> Result<()> {
+        let control_port = self.control_port;
         let this = Arc::new(self);
-        let addr = SocketAddr::from(([0, 0, 0, 0], CONTROL_PORT));
+        let addr = SocketAddr::from(([0, 0, 0, 0], control_port));
         let listener = TcpListener::bind(&addr).await?;
         info!(?addr, "server listening");
 

@@ -20,7 +20,7 @@ enum Command {
         #[clap(short, long, value_name = "HOST", default_value = "localhost")]
         local_host: String,
 
-        /// Address of the remote server to expose local ports to.
+        /// Address of the remote server to expose local ports to with an optional port
         #[clap(short, long, env = "BORE_SERVER")]
         to: String,
 
@@ -35,6 +35,10 @@ enum Command {
 
     /// Runs the remote proxy server.
     Server {
+        /// TCP control port number.
+        #[clap(long)]
+        control_port: Option<u16>,
+
         /// Minimum accepted TCP port number.
         #[clap(long, default_value_t = 1024)]
         min_port: u16,
@@ -63,6 +67,7 @@ async fn run(command: Command) -> Result<()> {
             client.listen().await?;
         }
         Command::Server {
+            control_port,
             min_port,
             max_port,
             secret,
@@ -73,7 +78,7 @@ async fn run(command: Command) -> Result<()> {
                     .error(ErrorKind::InvalidValue, "port range is empty")
                     .exit();
             }
-            Server::new(port_range, secret.as_deref()).listen().await?;
+            Server::new(control_port, port_range, secret.as_deref()).listen().await?;
         }
     }
 
